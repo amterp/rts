@@ -117,6 +117,63 @@ func (rt *RslTree) FindCalls() []*CallNode {
 	return callNodes
 }
 
+func (rt *RslTree) SrcAt(node *ts.Node) string {
+	start := node.StartByte()
+	end := node.EndByte()
+	if start == end {
+		return ""
+	}
+	return rt.src[start:end]
+}
+
+// NodeAt returns the innermost node at the given position.
+func (rt *RslTree) NodeAt(line, char int) *ts.Node {
+	point := ts.Point{
+		Row:    uint(line),
+		Column: uint(char),
+	}
+
+	node := rt.root.RootNode()
+
+	current := node
+	for {
+		// check if position is within this node's range
+		if point.Row < current.StartPosition().Row ||
+			point.Row > current.EndPosition().Row ||
+			(point.Row == current.StartPosition().Row && point.Column < current.StartPosition().Column) ||
+			(point.Row == current.EndPosition().Row && point.Column > current.EndPosition().Column) {
+			// outside this node's range, return
+			return nil
+		}
+
+		foundChild := false
+		for i := uint(0); i < current.ChildCount(); i++ {
+			child := current.Child(i)
+			if child == nil {
+				continue
+			}
+
+			startPos := child.StartPosition()
+			endPos := child.EndPosition()
+
+			// check if position is within child's range
+			if (point.Row > startPos.Row || (point.Row == startPos.Row && point.Column >= startPos.Column)) &&
+				(point.Row < endPos.Row || (point.Row == endPos.Row && point.Column <= endPos.Column)) {
+				current = child
+				foundChild = true
+				break
+			}
+		}
+
+		// if no suitable child was found, we've reached the most specific node
+		if !foundChild {
+			break
+		}
+	}
+
+	return current
+}
+
 // todo should take an ID instead of string for kind
 func (rt *RslTree) FindNodes(nodeKind string) []*ts.Node {
 	var found []*ts.Node
